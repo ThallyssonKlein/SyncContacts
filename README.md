@@ -112,6 +112,28 @@ Para apagar, a conta de origem precisa de permissão de escrita. Por isso, na
 primeira vez com `-delete-source`, o login da origem é pedido de novo, agora
 pedindo acesso de edição.
 
+## Conferir o que foi parar no destino
+
+```sh
+./synccontacts -check                     # usa os backup_origem_*.json da pasta atual
+./synccontacts -check -v backup_origem_20261108-105808.json
+```
+
+Lê os contatos dos backups (os que foram apagados da origem), lista os
+contatos do destino e mostra o que aconteceu com cada um:
+
+- **copiado pelo programa**: o contato do destino tem a marca de origem dele;
+- **email/telefone já existia**: não foi criado porque já havia um contato com
+  esse email ou telefone no destino;
+- **só bateu pelo nome**: no destino só existe alguém com o mesmo nome;
+- **não está no destino**: nada corresponde a ele (provavelmente foi apagado
+  ou editado no destino depois da cópia). Os dados estão no backup.
+
+Também avisa quando o contato do destino não tem algum dado que o da origem
+tinha (outro telefone, email, endereço, aniversário, notas...). Por padrão só
+lista os casos com problema; com `-v`, lista todos. Só faz login no destino e
+não altera nada. As opções vêm antes dos arquivos.
+
 ## Testes
 
 ```sh

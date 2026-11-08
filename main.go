@@ -29,13 +29,21 @@ type options struct {
 
 	deleteSource     bool
 	deleteDuplicates bool
+
+	check bool
 }
 
 func main() {
 	opts := parseFlags()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	if err := run(ctx, opts); err != nil {
+	var err error
+	if opts.check {
+		err = runCheck(ctx, opts, flag.Args())
+	} else {
+		err = run(ctx, opts)
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "erro: %v\n", err)
 		os.Exit(1)
 	}
@@ -58,8 +66,10 @@ func parseFlags() options {
 	flag.IntVar(&o.batchSize, "batch", maxBatchCreate, "quantos contatos criar por requisição (1-200)")
 	flag.BoolVar(&o.deleteSource, "delete-source", false, "depois de copiar, APAGA da origem os contatos copiados (agora ou em execuções anteriores)")
 	flag.BoolVar(&o.deleteDuplicates, "delete-duplicates", false, "implica -delete-source; apaga também da origem os contatos pulados porque o email ou telefone já existia no destino")
+	flag.BoolVar(&o.check, "check", false, "não copia nada: confere no destino o que aconteceu com os contatos dos backups (backup_origem_*.json) e por quê")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Uso: %s [opções]\n\nCopia os contatos de uma conta Google (origem) para outra (destino), sem duplicar.\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Uso: %s [opções]\n       %s -check [opções] [backup_origem_*.json ...]\n\n"+
+			"Copia os contatos de uma conta Google (origem) para outra (destino), sem duplicar.\n\n", os.Args[0], os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
