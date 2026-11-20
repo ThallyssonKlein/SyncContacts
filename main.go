@@ -1,5 +1,5 @@
-// synccontacts copia os contatos de uma conta Google para outra sem criar
-// duplicatas.
+// synccontacts copies contacts from one Google account to another without
+// creating duplicates.
 package main
 
 import (
@@ -44,7 +44,7 @@ func main() {
 		err = run(ctx, opts)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "erro: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -55,21 +55,21 @@ func parseFlags() options {
 		defDir = filepath.Join(d, "synccontacts")
 	}
 	var o options
-	flag.StringVar(&o.credentials, "credentials", "credentials.json", "arquivo do cliente OAuth (tipo \"App para computador\") baixado do Google Cloud")
-	flag.StringVar(&o.tokenDir, "token-dir", defDir, "pasta onde ficam salvos os tokens das duas contas")
-	flag.BoolVar(&o.dryRun, "dry-run", false, "só mostra o que seria feito, sem alterar nada no destino")
-	flag.BoolVar(&o.matchName, "match-name", true, "considera duplicado um contato com o mesmo nome completo")
-	flag.BoolVar(&o.labels, "labels", true, "copia os marcadores dos contatos, criando no destino os que faltarem")
-	flag.BoolVar(&o.yes, "yes", false, "não pede confirmação antes de criar os contatos")
-	flag.BoolVar(&o.relogin, "relogin", false, "descarta os tokens salvos e faz login de novo nas duas contas")
-	flag.BoolVar(&o.verbose, "v", false, "lista também os contatos ignorados por serem duplicados")
-	flag.IntVar(&o.batchSize, "batch", maxBatchCreate, "quantos contatos criar por requisição (1-200)")
-	flag.BoolVar(&o.deleteSource, "delete-source", false, "depois de copiar, APAGA da origem os contatos copiados (agora ou em execuções anteriores)")
-	flag.BoolVar(&o.deleteDuplicates, "delete-duplicates", false, "implica -delete-source; apaga também da origem os contatos pulados porque o email ou telefone já existia no destino")
-	flag.BoolVar(&o.check, "check", false, "não copia nada: confere no destino o que aconteceu com os contatos dos backups (backup_origem_*.json) e por quê")
+	flag.StringVar(&o.credentials, "credentials", "credentials.json", "OAuth client file (type \"Desktop app\") downloaded from Google Cloud")
+	flag.StringVar(&o.tokenDir, "token-dir", defDir, "directory where the tokens of both accounts are stored")
+	flag.BoolVar(&o.dryRun, "dry-run", false, "only show what would be done, without changing anything in the destination")
+	flag.BoolVar(&o.matchName, "match-name", true, "treat a contact with the same full name as a duplicate")
+	flag.BoolVar(&o.labels, "labels", true, "copy the contacts' labels, creating the missing ones in the destination")
+	flag.BoolVar(&o.yes, "yes", false, "do not ask for confirmation before creating the contacts")
+	flag.BoolVar(&o.relogin, "relogin", false, "discard the saved tokens and sign in to both accounts again")
+	flag.BoolVar(&o.verbose, "v", false, "also list the contacts skipped because they are duplicates")
+	flag.IntVar(&o.batchSize, "batch", maxBatchCreate, "how many contacts to create per request (1-200)")
+	flag.BoolVar(&o.deleteSource, "delete-source", false, "after copying, DELETE the copied contacts from the source (now or in previous runs)")
+	flag.BoolVar(&o.deleteDuplicates, "delete-duplicates", false, "implies -delete-source; also deletes from the source the contacts skipped because their email or phone already existed in the destination")
+	flag.BoolVar(&o.check, "check", false, "copy nothing: check in the destination what happened to the contacts in the backups (backup_source_*.json) and why")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Uso: %s [opções]\n       %s -check [opções] [backup_origem_*.json ...]\n\n"+
-			"Copia os contatos de uma conta Google (origem) para outra (destino), sem duplicar.\n\n", os.Args[0], os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n       %s -check [options] [backup_source_*.json ...]\n\n"+
+			"Copies the contacts of one Google account (source) to another (destination), without duplicating.\n\n", os.Args[0], os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -84,32 +84,32 @@ func run(ctx context.Context, o options) error {
 	if err := os.MkdirAll(o.tokenDir, 0o700); err != nil {
 		return err
 	}
-	srcScope, srcTokName := people.ContactsReadonlyScope, "token_origem.json"
+	srcScope, srcTokName := people.ContactsReadonlyScope, "token_source.json"
 	if o.deleteSource {
-		// Apagar exige permissão de escrita na origem. Usa um token separado
-		// para não reaproveitar o token salvo que só tem permissão de leitura.
-		srcScope, srcTokName = people.ContactsScope, "token_origem_escrita.json"
+		// Deleting requires write permission on the source. Uses a separate
+		// token so the saved read-only token is not reused.
+		srcScope, srcTokName = people.ContactsScope, "token_source_write.json"
 	}
 	srcTok := filepath.Join(o.tokenDir, srcTokName)
-	dstTok := filepath.Join(o.tokenDir, "token_destino.json")
+	dstTok := filepath.Join(o.tokenDir, "token_destination.json")
 	if o.relogin {
-		for _, f := range []string{"token_origem.json", "token_origem_escrita.json", "token_destino.json"} {
+		for _, f := range []string{"token_source.json", "token_source_write.json", "token_destination.json"} {
 			os.Remove(filepath.Join(o.tokenDir, f))
 		}
 	}
 
-	src, err := authenticate(ctx, o.credentials, srcTok, "ORIGEM", srcScope)
+	src, err := authenticate(ctx, o.credentials, srcTok, "SOURCE", srcScope)
 	if err != nil {
 		return err
 	}
-	dst, err := authenticate(ctx, o.credentials, dstTok, "DESTINO", people.ContactsScope)
+	dst, err := authenticate(ctx, o.credentials, dstTok, "DESTINATION", people.ContactsScope)
 	if err != nil {
 		return err
 	}
 	if strings.EqualFold(src.Email, dst.Email) {
-		return fmt.Errorf("origem e destino são a mesma conta (%s); rode com -relogin e escolha contas diferentes", src.Email)
+		return fmt.Errorf("source and destination are the same account (%s); run with -relogin and choose different accounts", src.Email)
 	}
-	fmt.Printf("\nOrigem:  %s\nDestino: %s\n\n", src.Email, dst.Email)
+	fmt.Printf("\nSource:      %s\nDestination: %s\n\n", src.Email, dst.Email)
 
 	srcSvc, err := people.NewService(ctx, option.WithHTTPClient(src.Client))
 	if err != nil {
@@ -122,33 +122,33 @@ func run(ctx context.Context, o options) error {
 
 	srcContacts, err := listContacts(ctx, srcSvc)
 	if err != nil {
-		return fmt.Errorf("lendo contatos da origem: %w", err)
+		return fmt.Errorf("reading source contacts: %w", err)
 	}
 	dstContacts, err := listContacts(ctx, dstSvc)
 	if err != nil {
-		return fmt.Errorf("lendo contatos do destino: %w", err)
+		return fmt.Errorf("reading destination contacts: %w", err)
 	}
-	fmt.Printf("%d contatos na origem, %d no destino.\n\n", len(srcContacts), len(dstContacts))
+	fmt.Printf("%d contacts in the source, %d in the destination.\n\n", len(srcContacts), len(dstContacts))
 
 	ix := newIndex()
 	for _, p := range dstContacts {
 		ix.add(p)
 	}
 
-	// toDelete: contatos da origem que serão apagados depois da cópia.
+	// toDelete: source contacts that will be deleted after the copy.
 	var toCreate, toDelete []*people.Person
 	for _, p := range srcContacts {
 		kind, reason := ix.match(p, sourceID(src.Email, p), o.matchName)
 		if kind == noMatch {
-			// Entra no índice para não criar duas vezes contatos que estão
-			// duplicados dentro da própria origem.
+			// Added to the index so contacts that are duplicated within the
+			// source itself are not created twice.
 			ix.add(p)
 			toCreate = append(toCreate, p)
 			fmt.Printf("  + %s\n", displayName(p))
 			continue
 		}
-		// Contatos que só bateram pelo nome nunca são apagados: podem ser
-		// pessoas diferentes, ou ter dados que o contato do destino não tem.
+		// Contacts that matched only by name are never deleted: they may be
+		// different people, or have data the destination contact lacks.
 		del := o.deleteSource && (kind == matchImported ||
 			(o.deleteDuplicates && (kind == matchEmail || kind == matchPhone)))
 		if del {
@@ -170,25 +170,25 @@ func run(ctx context.Context, o options) error {
 	}
 	missingLabels := groups.missing(toCreate)
 
-	fmt.Printf("\nResumo: %d a criar, %d já existem no destino.\n", len(toCreate), len(srcContacts)-len(toCreate))
+	fmt.Printf("\nSummary: %d to create, %d already exist in the destination.\n", len(toCreate), len(srcContacts)-len(toCreate))
 	if len(missingLabels) > 0 {
-		fmt.Printf("Marcadores a criar no destino: %s\n", strings.Join(missingLabels, ", "))
+		fmt.Printf("Labels to create in the destination: %s\n", strings.Join(missingLabels, ", "))
 	}
 	if o.deleteSource {
-		fmt.Printf("%d contatos serão APAGADOS da origem (%s) depois da cópia.\n", len(toDelete), src.Email)
+		fmt.Printf("%d contacts will be DELETED from the source (%s) after the copy.\n", len(toDelete), src.Email)
 	}
 	if len(toCreate) == 0 && len(toDelete) == 0 {
-		fmt.Println("Nada a fazer.")
+		fmt.Println("Nothing to do.")
 		return nil
 	}
 	if o.dryRun {
-		fmt.Println("Modo -dry-run: nada foi alterado.")
+		fmt.Println("-dry-run mode: nothing was changed.")
 		return nil
 	}
 
 	if len(toCreate) > 0 {
-		if !o.yes && !confirm(fmt.Sprintf("Criar %d contatos em %s?", len(toCreate), dst.Email)) {
-			fmt.Println("Cancelado. Nada foi alterado.")
+		if !o.yes && !confirm(fmt.Sprintf("Create %d contacts in %s?", len(toCreate), dst.Email)) {
+			fmt.Println("Cancelled. Nothing was changed.")
 			return nil
 		}
 		if err := groups.create(ctx, dstSvc, missingLabels); err != nil {
@@ -200,39 +200,39 @@ func run(ctx context.Context, o options) error {
 		}
 		created, err := batchCreate(ctx, dstSvc, persons, o.batchSize)
 		if err != nil {
-			// Nada é apagado da origem se a cópia não terminou por completo.
-			return fmt.Errorf("%d de %d contatos criados antes da falha; nada foi apagado da origem "+
-				"(rodar de novo continua de onde parou): %w", created, len(persons), err)
+			// Nothing is deleted from the source if the copy did not finish.
+			return fmt.Errorf("%d of %d contacts created before the failure; nothing was deleted from the source "+
+				"(running again resumes where it stopped): %w", created, len(persons), err)
 		}
-		fmt.Printf("\n%d contatos copiados para %s.\n", created, dst.Email)
+		fmt.Printf("\n%d contacts copied to %s.\n", created, dst.Email)
 	}
 
 	if len(toDelete) > 0 {
 		fmt.Println()
-		if !o.yes && !confirm(fmt.Sprintf("APAGAR %d contatos da conta de origem %s?", len(toDelete), src.Email)) {
-			fmt.Println("Nenhum contato foi apagado da origem.")
+		if !o.yes && !confirm(fmt.Sprintf("DELETE %d contacts from the source account %s?", len(toDelete), src.Email)) {
+			fmt.Println("No contacts were deleted from the source.")
 			return nil
 		}
 		backup, err := writeBackup(toDelete)
 		if err != nil {
-			return fmt.Errorf("%w; nenhum contato foi apagado", err)
+			return fmt.Errorf("%w; no contacts were deleted", err)
 		}
-		fmt.Printf("Backup dos contatos que serão apagados: %s\n", backup)
+		fmt.Printf("Backup of the contacts about to be deleted: %s\n", backup)
 		deleted, err := batchDelete(ctx, srcSvc, toDelete)
 		if err != nil {
-			return fmt.Errorf("%d de %d contatos apagados da origem antes da falha: %w", deleted, len(toDelete), err)
+			return fmt.Errorf("%d of %d contacts deleted from the source before the failure: %w", deleted, len(toDelete), err)
 		}
-		fmt.Printf("%d contatos apagados de %s.\n", deleted, src.Email)
+		fmt.Printf("%d contacts deleted from %s.\n", deleted, src.Email)
 	}
-	fmt.Println("\nPronto.")
+	fmt.Println("\nDone.")
 	return nil
 }
 
 func confirm(question string) bool {
-	fmt.Printf("%s [s/N] ", question)
+	fmt.Printf("%s [y/N] ", question)
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "s", "sim", "y", "yes":
+	case "y", "yes":
 		return true
 	}
 	return false

@@ -9,20 +9,20 @@ import (
 	"google.golang.org/api/people/v1"
 )
 
-// clientDataKey marca, em cada contato criado no destino, de qual contato da
-// origem ele veio. Assim rodar o programa de novo nunca reimporta o mesmo
-// contato, mesmo que alguém tenha editado o email/telefone dele no destino.
+// clientDataKey marks, on each contact created in the destination, which source
+// contact it came from. This way running the program again never re-imports the
+// same contact, even if someone edited its email/phone in the destination.
 const clientDataKey = "syncContactsSourceId"
 
-// Telefones são comparados pelos últimos 8 dígitos. Isso ignora DDI, DDD,
-// zeros de operadora e o "9" extra dos celulares brasileiros, de forma que
-// "+55 (11) 98765-4321", "011 98765 4321" e "8765-4321" batem entre si.
+// Phones are compared by their last 8 digits. This ignores country code, area
+// code, carrier zeros and the extra "9" of Brazilian mobile numbers, so
+// "+55 (11) 98765-4321", "011 98765 4321" and "8765-4321" match each other.
 const phoneSuffixLen = 8
 
-// index guarda as chaves de comparação dos contatos que já existem no destino
-// (e dos que já foram escolhidos para criação nesta execução).
+// index holds the comparison keys of the contacts that already exist in the
+// destination (and of those already chosen for creation in this run).
 type index struct {
-	emails    map[string]string // chave -> nome do contato existente
+	emails    map[string]string // key -> name of the existing contact
 	phones    map[string]string
 	names     map[string]string
 	sourceIDs map[string]string
@@ -59,35 +59,35 @@ func (ix *index) add(p *people.Person) {
 	}
 }
 
-// matchKind diz por que um contato foi considerado duplicado.
+// matchKind says why a contact was considered a duplicate.
 type matchKind int
 
 const (
 	noMatch       matchKind = iota
-	matchImported           // copiado por este programa numa execução anterior
+	matchImported           // copied by this program in a previous run
 	matchEmail
 	matchPhone
 	matchName
 )
 
-// match diz se p já existe no índice e, se sim, por quê.
+// match says whether p already exists in the index and, if so, why.
 func (ix *index) match(p *people.Person, sourceID string, useName bool) (matchKind, string) {
 	if l, ok := ix.sourceIDs[sourceID]; ok && sourceID != "" {
-		return matchImported, fmt.Sprintf("já importado antes como %q", l)
+		return matchImported, fmt.Sprintf("already imported before as %q", l)
 	}
 	for _, e := range p.EmailAddresses {
 		if l, ok := ix.emails[emailKey(e.Value)]; ok {
-			return matchEmail, fmt.Sprintf("email %s já está em %q", e.Value, l)
+			return matchEmail, fmt.Sprintf("email %s is already in %q", e.Value, l)
 		}
 	}
 	for _, ph := range p.PhoneNumbers {
 		if l, ok := ix.phones[phoneKey(ph)]; ok {
-			return matchPhone, fmt.Sprintf("telefone %s já está em %q", ph.Value, l)
+			return matchPhone, fmt.Sprintf("phone %s is already in %q", ph.Value, l)
 		}
 	}
 	if useName {
 		if l, ok := ix.names[nameKey(p)]; ok {
-			return matchName, fmt.Sprintf("mesmo nome de %q", l)
+			return matchName, fmt.Sprintf("same name as %q", l)
 		}
 	}
 	return noMatch, ""
@@ -118,8 +118,8 @@ func digits(s string) string {
 	return b.String()
 }
 
-// nameKey normaliza o nome completo: sem acentos, minúsculo e com espaços
-// simples, para que "José  da Silva" e "jose da silva" sejam iguais.
+// nameKey normalizes the full name: accent-free, lowercase and with single
+// spaces, so "José  da Silva" and "jose da silva" are equal.
 func nameKey(p *people.Person) string {
 	if len(p.Names) == 0 {
 		return ""
@@ -145,7 +145,7 @@ func fold(s string) string {
 	return strings.Join(strings.Fields(b.String()), " ")
 }
 
-// displayName devolve algo legível para identificar o contato nos logs.
+// displayName returns something readable to identify the contact in the logs.
 func displayName(p *people.Person) string {
 	if len(p.Names) > 0 {
 		n := p.Names[0]
@@ -164,5 +164,5 @@ func displayName(p *people.Person) string {
 	if len(p.Organizations) > 0 && p.Organizations[0].Name != "" {
 		return p.Organizations[0].Name
 	}
-	return "(sem nome)"
+	return "(no name)"
 }

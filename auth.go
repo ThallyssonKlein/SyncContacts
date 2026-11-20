@@ -18,8 +18,8 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// Escopo extra só para descobrir o email da conta logada, para o usuário
-// conferir qual conta é a origem e qual é o destino.
+// Extra scope used only to discover the signed-in account's email, so the user
+// can verify which account is the source and which is the destination.
 const userinfoScope = "https://www.googleapis.com/auth/userinfo.email"
 
 type account struct {
@@ -27,17 +27,17 @@ type account struct {
 	Client *http.Client
 }
 
-// authenticate devolve um cliente HTTP autenticado para uma conta. Usa o token
-// salvo em tokenPath quando ele ainda funciona; caso contrário abre o navegador
-// para o usuário fazer login e salva o novo token.
+// authenticate returns an authenticated HTTP client for an account. It uses the
+// token saved at tokenPath when it still works; otherwise it opens the browser
+// for the user to sign in and saves the new token.
 func authenticate(ctx context.Context, credsPath, tokenPath, role, scope string) (*account, error) {
 	b, err := os.ReadFile(credsPath)
 	if err != nil {
-		return nil, fmt.Errorf("lendo %s (veja o README para gerar esse arquivo): %w", credsPath, err)
+		return nil, fmt.Errorf("reading %s (see the README to generate this file): %w", credsPath, err)
 	}
 	cfg, err := google.ConfigFromJSON(b, scope, userinfoScope)
 	if err != nil {
-		return nil, fmt.Errorf("credenciais inválidas em %s: %w", credsPath, err)
+		return nil, fmt.Errorf("invalid credentials in %s: %w", credsPath, err)
 	}
 
 	if tok, err := loadToken(tokenPath); err == nil {
@@ -45,7 +45,7 @@ func authenticate(ctx context.Context, credsPath, tokenPath, role, scope string)
 		if email, err := fetchEmail(ctx, client); err == nil {
 			return &account{Email: email, Client: client}, nil
 		}
-		fmt.Printf("O token salvo da conta de %s não funciona mais; faça login de novo.\n", role)
+		fmt.Printf("The saved token for the %s account no longer works; please sign in again.\n", role)
 	}
 
 	tok, err := loginInteractive(ctx, cfg, role)
@@ -58,17 +58,17 @@ func authenticate(ctx context.Context, credsPath, tokenPath, role, scope string)
 	client := cfg.Client(ctx, tok)
 	email, err := fetchEmail(ctx, client)
 	if err != nil {
-		return nil, fmt.Errorf("obtendo o email da conta de %s: %w", role, err)
+		return nil, fmt.Errorf("getting the email of the %s account: %w", role, err)
 	}
 	return &account{Email: email, Client: client}, nil
 }
 
-// loginInteractive faz o fluxo OAuth de app desktop: sobe um servidor local em
-// 127.0.0.1, abre o navegador e espera o Google redirecionar com o código.
+// loginInteractive runs the desktop-app OAuth flow: starts a local server on
+// 127.0.0.1, opens the browser and waits for Google to redirect with the code.
 func loginInteractive(ctx context.Context, base *oauth2.Config, role string) (*oauth2.Token, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return nil, fmt.Errorf("abrindo porta local para o login: %w", err)
+		return nil, fmt.Errorf("opening a local port for the login: %w", err)
 	}
 	defer ln.Close()
 
@@ -79,8 +79,8 @@ func loginInteractive(ctx context.Context, base *oauth2.Config, role string) (*o
 	authURL := cfg.AuthCodeURL(state,
 		oauth2.AccessTypeOffline,
 		oauth2.S256ChallengeOption(verifier),
-		// Força a tela de escolha de conta, senão o Google loga direto na
-		// conta ativa do navegador e as duas contas acabam sendo a mesma.
+		// Forces the account chooser; otherwise Google signs in straight to
+		// the browser's active account and both accounts end up being the same.
 		oauth2.SetAuthURLParam("prompt", "select_account consent"),
 	)
 
@@ -100,24 +100,24 @@ func loginInteractive(ctx context.Context, base *oauth2.Config, role string) (*o
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			q := r.URL.Query()
 			if q.Get("state") != state {
-				http.Error(w, "requisição inválida", http.StatusBadRequest)
+				http.Error(w, "invalid request", http.StatusBadRequest)
 				return
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			if e := q.Get("error"); e != "" {
-				fmt.Fprint(w, "<p>Autorização negada. Pode fechar esta aba.</p>")
-				send(result{err: fmt.Errorf("autorização negada pelo Google: %s", e)})
+				fmt.Fprint(w, "<p>Authorization denied. You can close this tab.</p>")
+				send(result{err: fmt.Errorf("authorization denied by Google: %s", e)})
 				return
 			}
-			fmt.Fprintf(w, "<p>Conta de %s autorizada. Pode fechar esta aba e voltar ao terminal.</p>", role)
+			fmt.Fprintf(w, "<p>%s account authorized. You can close this tab and go back to the terminal.</p>", role)
 			send(result{code: q.Get("code")})
 		}),
 	}
 	go srv.Serve(ln)
 	defer srv.Shutdown(context.Background())
 
-	fmt.Printf("\n>>> Faça login com a conta de %s.\n", role)
-	fmt.Printf("Se o navegador não abrir sozinho, acesse:\n%s\n\n", authURL)
+	fmt.Printf("\n>>> Sign in with the %s account.\n", role)
+	fmt.Printf("If the browser does not open by itself, go to:\n%s\n\n", authURL)
 	openBrowser(authURL)
 
 	select {
@@ -127,11 +127,11 @@ func loginInteractive(ctx context.Context, base *oauth2.Config, role string) (*o
 		}
 		tok, err := cfg.Exchange(ctx, r.code, oauth2.VerifierOption(verifier))
 		if err != nil {
-			return nil, fmt.Errorf("trocando o código pelo token: %w", err)
+			return nil, fmt.Errorf("exchanging the code for a token: %w", err)
 		}
 		return tok, nil
 	case <-time.After(5 * time.Minute):
-		return nil, fmt.Errorf("tempo esgotado esperando o login da conta de %s", role)
+		return nil, fmt.Errorf("timed out waiting for the %s account login", role)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -149,7 +149,7 @@ func fetchEmail(ctx context.Context, client *http.Client) (string, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("userinfo respondeu %s: %s", resp.Status, body)
+		return "", fmt.Errorf("userinfo responded %s: %s", resp.Status, body)
 	}
 	var info struct {
 		Email string `json:"email"`
@@ -158,7 +158,7 @@ func fetchEmail(ctx context.Context, client *http.Client) (string, error) {
 		return "", err
 	}
 	if info.Email == "" {
-		return "", fmt.Errorf("userinfo não retornou email")
+		return "", fmt.Errorf("userinfo returned no email")
 	}
 	return info.Email, nil
 }
@@ -181,7 +181,7 @@ func saveToken(path string, tok *oauth2.Token) error {
 		return err
 	}
 	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return fmt.Errorf("salvando token em %s: %w", path, err)
+		return fmt.Errorf("saving token to %s: %w", path, err)
 	}
 	return nil
 }

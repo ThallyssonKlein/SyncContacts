@@ -33,29 +33,29 @@ func TestCheckClassify(t *testing.T) {
 		want checkStatus
 		lost []string
 	}{
-		{"importado", &people.Person{ResourceName: "people/c1", Names: []*people.Name{{DisplayName: "Ana"}}}, checkImported, nil},
-		{"importado e editado no destino", &people.Person{
+		{"imported", &people.Person{ResourceName: "people/c1", Names: []*people.Name{{DisplayName: "Ana"}}}, checkImported, nil},
+		{"imported and edited in the destination", &people.Person{
 			ResourceName: "people/c1",
 			PhoneNumbers: []*people.PhoneNumber{{Value: "11 92222-2222"}},
-		}, checkImported, []string{"telefone 11 92222-2222"}},
-		{"email já existia", &people.Person{
+		}, checkImported, []string{"phone 11 92222-2222"}},
+		{"email already existed", &people.Person{
 			ResourceName:   "people/c2",
 			EmailAddresses: []*people.EmailAddress{{Value: "Bruno@X.com"}},
 			PhoneNumbers:   []*people.PhoneNumber{{Value: "11 94444-4444"}},
 			Addresses:      []*people.Address{{City: "Recife"}},
-		}, checkEmail, []string{"telefone 11 94444-4444", "endereço"}},
-		{"telefone já existia", &people.Person{ResourceName: "people/c3", PhoneNumbers: []*people.PhoneNumber{{Value: "(21) 3333-3333"}}}, checkPhone, nil},
-		{"só o nome", &people.Person{ResourceName: "people/c4", Names: []*people.Name{{GivenName: "Daniel", FamilyName: "Lima"}}}, checkName, nil},
-		{"sumiu", &people.Person{ResourceName: "people/c5", Names: []*people.Name{{DisplayName: "Eva"}}}, checkMissing, nil},
-		{"vazio", &people.Person{}, checkMissing, nil},
+		}, checkEmail, []string{"phone 11 94444-4444", "address"}},
+		{"phone already existed", &people.Person{ResourceName: "people/c3", PhoneNumbers: []*people.PhoneNumber{{Value: "(21) 3333-3333"}}}, checkPhone, nil},
+		{"name only", &people.Person{ResourceName: "people/c4", Names: []*people.Name{{GivenName: "Daniel", FamilyName: "Lima"}}}, checkName, nil},
+		{"gone", &people.Person{ResourceName: "people/c5", Names: []*people.Name{{DisplayName: "Eva"}}}, checkMissing, nil},
+		{"empty", &people.Person{}, checkMissing, nil},
 	}
 	for _, c := range cases {
 		r := ix.classify(c.p)
 		if r.status != c.want {
-			t.Errorf("%s: status = %v, quer %v (%s)", c.name, r.status, c.want, r.reason)
+			t.Errorf("%s: status = %v, want %v (%s)", c.name, r.status, c.want, r.reason)
 		}
 		if !slices.Equal(r.lost, c.lost) {
-			t.Errorf("%s: lost = %q, quer %q", c.name, r.lost, c.lost)
+			t.Errorf("%s: lost = %q, want %q", c.name, r.lost, c.lost)
 		}
 	}
 }
@@ -71,6 +71,6 @@ func TestLoadBackupsDedupes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
-		t.Errorf("esperava 3 contatos sem repetição, veio %d", len(got))
+		t.Errorf("expected 3 contacts without repeats, got %d", len(got))
 	}
 }

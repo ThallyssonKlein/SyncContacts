@@ -19,16 +19,16 @@ const personFields = "names,nicknames,emailAddresses,phoneNumbers,addresses,orga
 	"memberships,clientData"
 
 const (
-	maxBatchCreate = 200 // limite da API para people.batchCreateContacts
-	maxBatchDelete = 500 // limite da API para people.batchDeleteContacts
+	maxBatchCreate = 200 // API limit for people.batchCreateContacts
+	maxBatchDelete = 500 // API limit for people.batchDeleteContacts
 )
 
 func listContacts(ctx context.Context, svc *people.Service) ([]*people.Person, error) {
 	var all []*people.Person
 	err := svc.People.Connections.List("people/me").
 		PersonFields(personFields).
-		// Só os dados do contato em si, sem misturar com o perfil público
-		// da pessoa no Google.
+		// Only the contact's own data, without mixing in the person's public
+		// Google profile.
 		Sources("READ_SOURCE_TYPE_CONTACT").
 		PageSize(1000).
 		Pages(ctx, func(r *people.ListConnectionsResponse) error {
@@ -42,12 +42,12 @@ func sourceID(sourceEmail string, p *people.Person) string {
 	return sourceEmail + "|" + p.ResourceName
 }
 
-// copyPerson monta um contato novo, pronto para ser criado no destino, a
-// partir de um contato da origem. Os metadados da origem (ids, etag, fonte)
-// e campos somente-leitura são descartados.
+// copyPerson builds a new contact, ready to be created in the destination,
+// from a source contact. Source metadata (ids, etag, source) and read-only
+// fields are dropped.
 func copyPerson(src *people.Person, sourceEmail string, groups *groupMapper) *people.Person {
 	p := &people.Person{
-		// names, birthdays e biographies só aceitam um valor em contatos.
+		// names, birthdays and biographies accept only one value on contacts.
 		Names: first(cloneAll(src.Names, func(n *people.Name) {
 			n.Metadata, n.DisplayName, n.DisplayNameLastFirst = nil, "", ""
 		})),
@@ -102,8 +102,8 @@ func first[T any](in []*T) []*T {
 	return in
 }
 
-// batchCreate cria os contatos no destino em lotes, de forma sequencial
-// (recomendação do Google para escritas na mesma conta).
+// batchCreate creates the contacts in the destination in batches, sequentially
+// (Google's recommendation for writes to the same account).
 func batchCreate(ctx context.Context, svc *people.Service, persons []*people.Person, batchSize int) (int, error) {
 	created := 0
 	for start := 0; start < len(persons); start += batchSize {
@@ -120,12 +120,12 @@ func batchCreate(ctx context.Context, svc *people.Service, persons []*people.Per
 			return created, err
 		}
 		created = end
-		fmt.Printf("  %d/%d contatos criados\n", created, len(persons))
+		fmt.Printf("  %d/%d contacts created\n", created, len(persons))
 	}
 	return created, nil
 }
 
-// batchDelete apaga contatos (pelo resourceName) em lotes sequenciais.
+// batchDelete deletes contacts (by resourceName) in sequential batches.
 func batchDelete(ctx context.Context, svc *people.Service, persons []*people.Person) (int, error) {
 	deleted := 0
 	for start := 0; start < len(persons); start += maxBatchDelete {
@@ -142,27 +142,27 @@ func batchDelete(ctx context.Context, svc *people.Service, persons []*people.Per
 			return deleted, err
 		}
 		deleted = end
-		fmt.Printf("  %d/%d contatos apagados\n", deleted, len(persons))
+		fmt.Printf("  %d/%d contacts deleted\n", deleted, len(persons))
 	}
 	return deleted, nil
 }
 
-// writeBackup salva em JSON os contatos da origem que serão apagados, para
-// ter como recuperar os dados se algo der errado.
+// writeBackup saves the source contacts that are about to be deleted as JSON,
+// so the data can be recovered if something goes wrong.
 func writeBackup(persons []*people.Person) (string, error) {
-	name := "backup_origem_" + time.Now().Format("20060102-150405") + ".json"
+	name := "backup_source_" + time.Now().Format("20060102-150405") + ".json"
 	b, err := json.MarshalIndent(persons, "", "  ")
 	if err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(name, b, 0o600); err != nil {
-		return "", fmt.Errorf("salvando backup %s: %w", name, err)
+		return "", fmt.Errorf("saving backup %s: %w", name, err)
 	}
 	return name, nil
 }
 
-// withRetry repete a chamada quando a API responde que o limite de uso foi
-// atingido (429) ou que está temporariamente indisponível (503).
+// withRetry repeats the call when the API reports that the rate limit was
+// reached (429) or that it is temporarily unavailable (503).
 func withRetry(ctx context.Context, fn func() error) error {
 	delay := 5 * time.Second
 	for attempt := 1; ; attempt++ {
@@ -172,7 +172,7 @@ func withRetry(ctx context.Context, fn func() error) error {
 			(gerr.Code != http.StatusTooManyRequests && gerr.Code != http.StatusServiceUnavailable) {
 			return err
 		}
-		fmt.Printf("  API respondeu HTTP %d, tentando de novo em %s...\n", gerr.Code, delay)
+		fmt.Printf("  API responded HTTP %d, retrying in %s...\n", gerr.Code, delay)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -182,11 +182,11 @@ func withRetry(ctx context.Context, fn func() error) error {
 	}
 }
 
-// groupMapper traduz os marcadores (labels) da origem para os do destino,
-// casando pelo nome.
+// groupMapper translates the source's labels to the destination's, matching
+// them by name.
 type groupMapper struct {
-	srcNames  map[string]string // resourceName na origem -> nome
-	dstByName map[string]string // nome -> resourceName no destino
+	srcNames  map[string]string // resourceName in the source -> name
+	dstByName map[string]string // name -> resourceName in the destination
 }
 
 func newGroupMapper(ctx context.Context, srcSvc, dstSvc *people.Service) (*groupMapper, error) {
@@ -201,7 +201,7 @@ func newGroupMapper(ctx context.Context, srcSvc, dstSvc *people.Service) (*group
 			return nil
 		})
 	if err != nil {
-		return nil, fmt.Errorf("listando marcadores da origem: %w", err)
+		return nil, fmt.Errorf("listing source labels: %w", err)
 	}
 	err = dstSvc.ContactGroups.List().GroupFields("name,groupType").PageSize(1000).
 		Pages(ctx, func(r *people.ListContactGroupsResponse) error {
@@ -213,7 +213,7 @@ func newGroupMapper(ctx context.Context, srcSvc, dstSvc *people.Service) (*group
 			return nil
 		})
 	if err != nil {
-		return nil, fmt.Errorf("listando marcadores do destino: %w", err)
+		return nil, fmt.Errorf("listing destination labels: %w", err)
 	}
 	return g, nil
 }
@@ -231,7 +231,8 @@ func (g *groupMapper) labelsOf(p *people.Person) []string {
 	return out
 }
 
-// missing lista os marcadores usados pelos contatos que ainda não existem no destino.
+// missing lists the labels used by contacts that do not exist in the
+// destination yet.
 func (g *groupMapper) missing(persons []*people.Person) []string {
 	if g == nil {
 		return nil
@@ -261,10 +262,10 @@ func (g *groupMapper) create(ctx context.Context, svc *people.Service, names []s
 			return err
 		})
 		if err != nil {
-			return fmt.Errorf("criando marcador %q: %w", name, err)
+			return fmt.Errorf("creating label %q: %w", name, err)
 		}
 		g.dstByName[name] = cg.ResourceName
-		fmt.Printf("  marcador criado: %s\n", name)
+		fmt.Printf("  label created: %s\n", name)
 	}
 	return nil
 }
@@ -284,8 +285,8 @@ func (g *groupMapper) memberships(p *people.Person) []*people.Membership {
 	if len(out) == 0 {
 		return nil
 	}
-	// Ao informar marcadores na criação, inclui "Meus contatos" explicitamente
-	// para o contato não ficar fora da lista principal.
+	// When labels are given at creation, "My Contacts" is included explicitly
+	// so the contact does not end up outside the main list.
 	return append(out, &people.Membership{
 		ContactGroupMembership: &people.ContactGroupMembership{ContactGroupResourceName: "contactGroups/myContacts"},
 	})

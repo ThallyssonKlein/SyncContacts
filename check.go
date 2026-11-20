@@ -1,8 +1,8 @@
 package main
 
-// Modo -check: confere na conta de destino o que aconteceu com cada contato
-// salvo nos backups (backup_origem_*.json), ou seja, com os contatos que
-// foram apagados da origem. Não altera nada em nenhuma das contas.
+// -check mode: checks in the destination account what happened to each contact
+// saved in the backups (backup_source_*.json), i.e. the contacts that were
+// deleted from the source. Changes nothing in either account.
 
 import (
 	"context"
@@ -20,25 +20,25 @@ import (
 type checkStatus int
 
 const (
-	checkImported checkStatus = iota // criado no destino por este programa
-	checkEmail                       // não foi criado: o email já existia no destino
-	checkPhone                       // não foi criado: o telefone já existia no destino
-	checkName                        // só existe no destino alguém com o mesmo nome
-	checkMissing                     // nada no destino corresponde a ele
+	checkImported checkStatus = iota // created in the destination by this program
+	checkEmail                       // not created: the email already existed in the destination
+	checkPhone                       // not created: the phone already existed in the destination
+	checkName                        // the destination only has someone with the same name
+	checkMissing                     // nothing in the destination matches it
 )
 
 type checkResult struct {
 	src    *people.Person
 	status checkStatus
-	dst    *people.Person // contato correspondente no destino (nil em checkMissing)
+	dst    *people.Person // matching contact in the destination (nil for checkMissing)
 	reason string
-	lost   []string // dados do contato da origem que não estão no do destino
+	lost   []string // data from the source contact that is not in the destination one
 }
 
-// dstIndex indexa os contatos do destino guardando o próprio contato, para
-// depois comparar os dados com os da origem.
+// dstIndex indexes the destination contacts keeping the contact itself, so its
+// data can later be compared with the source's.
 type dstIndex struct {
-	bySourceRN map[string]*people.Person // resourceName na origem -> contato criado
+	bySourceRN map[string]*people.Person // resourceName in the source -> created contact
 	emails     map[string]*people.Person
 	phones     map[string]*people.Person
 	names      map[string]*people.Person
@@ -58,8 +58,8 @@ func newDstIndex(contacts []*people.Person) *dstIndex {
 	}
 	for _, p := range contacts {
 		for _, cd := range p.ClientData {
-			// O valor é "<email da origem>|<resourceName na origem>". O backup
-			// não guarda o email da origem, então a busca é pelo resourceName.
+			// The value is "<source email>|<resourceName in the source>". The
+			// backup does not store the source email, so lookup is by resourceName.
 			if cd.Key != clientDataKey {
 				continue
 			}
@@ -82,13 +82,13 @@ func (ix *dstIndex) classify(p *people.Person) checkResult {
 	r := checkResult{src: p, status: checkMissing}
 	if d, ok := ix.bySourceRN[p.ResourceName]; ok && p.ResourceName != "" {
 		r.status, r.dst = checkImported, d
-		r.reason = fmt.Sprintf("copiado pelo programa como %q", displayName(d))
+		r.reason = fmt.Sprintf("copied by the program as %q", displayName(d))
 	}
 	if r.dst == nil {
 		for _, e := range p.EmailAddresses {
 			if d, ok := ix.emails[emailKey(e.Value)]; ok {
 				r.status, r.dst = checkEmail, d
-				r.reason = fmt.Sprintf("não foi criado: o email %s já estava em %q", e.Value, displayName(d))
+				r.reason = fmt.Sprintf("not created: email %s was already in %q", e.Value, displayName(d))
 				break
 			}
 		}
@@ -97,7 +97,7 @@ func (ix *dstIndex) classify(p *people.Person) checkResult {
 		for _, ph := range p.PhoneNumbers {
 			if d, ok := ix.phones[phoneKey(ph)]; ok && phoneKey(ph) != "" {
 				r.status, r.dst = checkPhone, d
-				r.reason = fmt.Sprintf("não foi criado: o telefone %s já estava em %q", ph.Value, displayName(d))
+				r.reason = fmt.Sprintf("not created: phone %s was already in %q", ph.Value, displayName(d))
 				break
 			}
 		}
@@ -105,18 +105,18 @@ func (ix *dstIndex) classify(p *people.Person) checkResult {
 	if r.dst == nil {
 		if d, ok := ix.names[nameKey(p)]; ok && nameKey(p) != "" {
 			r.status, r.dst = checkName, d
-			r.reason = fmt.Sprintf("só existe %q, com o mesmo nome; pode ser outra pessoa", displayName(d))
+			r.reason = fmt.Sprintf("only %q exists, with the same name; may be a different person", displayName(d))
 		}
 	}
 	if r.dst == nil {
-		r.reason = "nenhum contato no destino tem a marca do programa, nem o mesmo email, telefone ou nome"
+		r.reason = "no contact in the destination has the program's mark, or the same email, phone or name"
 		return r
 	}
 	r.lost = lostData(p, r.dst)
 	return r
 }
 
-// lostData lista o que o contato da origem tem e o do destino não tem.
+// lostData lists what the source contact has and the destination one lacks.
 func lostData(src, dst *people.Person) []string {
 	var out []string
 	emails := map[string]bool{}
@@ -134,22 +134,22 @@ func lostData(src, dst *people.Person) []string {
 	}
 	for _, ph := range src.PhoneNumbers {
 		if k := phoneKey(ph); k != "" && !phones[k] {
-			out = append(out, "telefone "+ph.Value)
+			out = append(out, "phone "+ph.Value)
 		}
 	}
 	fields := []struct {
 		name     string
 		src, dst int
 	}{
-		{"endereço", len(src.Addresses), len(dst.Addresses)},
-		{"empresa", len(src.Organizations), len(dst.Organizations)},
-		{"aniversário", len(src.Birthdays), len(dst.Birthdays)},
-		{"notas", len(src.Biographies), len(dst.Biographies)},
-		{"apelido", len(src.Nicknames), len(dst.Nicknames)},
-		{"site", len(src.Urls), len(dst.Urls)},
-		{"datas", len(src.Events), len(dst.Events)},
-		{"parentes", len(src.Relations), len(dst.Relations)},
-		{"campos personalizados", len(src.UserDefined), len(dst.UserDefined)},
+		{"address", len(src.Addresses), len(dst.Addresses)},
+		{"company", len(src.Organizations), len(dst.Organizations)},
+		{"birthday", len(src.Birthdays), len(dst.Birthdays)},
+		{"notes", len(src.Biographies), len(dst.Biographies)},
+		{"nickname", len(src.Nicknames), len(dst.Nicknames)},
+		{"website", len(src.Urls), len(dst.Urls)},
+		{"dates", len(src.Events), len(dst.Events)},
+		{"relatives", len(src.Relations), len(dst.Relations)},
+		{"custom fields", len(src.UserDefined), len(dst.UserDefined)},
 	}
 	for _, f := range fields {
 		if f.src > 0 && f.dst == 0 {
@@ -159,7 +159,7 @@ func lostData(src, dst *people.Person) []string {
 	return out
 }
 
-// loadBackups lê os arquivos de backup, ignorando contatos repetidos entre eles.
+// loadBackups reads the backup files, skipping contacts repeated across them.
 func loadBackups(paths []string) ([]*people.Person, error) {
 	seen := map[string]bool{}
 	var out []*people.Person
@@ -170,7 +170,7 @@ func loadBackups(paths []string) ([]*people.Person, error) {
 		}
 		var persons []*people.Person
 		if err := json.Unmarshal(b, &persons); err != nil {
-			return nil, fmt.Errorf("lendo backup %s: %w", path, err)
+			return nil, fmt.Errorf("reading backup %s: %w", path, err)
 		}
 		for _, p := range persons {
 			if p.ResourceName != "" {
@@ -187,25 +187,25 @@ func loadBackups(paths []string) ([]*people.Person, error) {
 
 func runCheck(ctx context.Context, o options, files []string) error {
 	if len(files) == 0 {
-		files, _ = filepath.Glob("backup_origem_*.json")
+		files, _ = filepath.Glob("backup_source_*.json")
 		if len(files) == 0 {
-			return fmt.Errorf("nenhum backup_origem_*.json na pasta atual; passe os arquivos: -check ARQ...")
+			return fmt.Errorf("no backup_source_*.json in the current directory; pass the files: -check FILE...")
 		}
 	}
 	backup, err := loadBackups(files)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%d contatos em %d backup(s): %s\n", len(backup), len(files), strings.Join(files, ", "))
+	fmt.Printf("%d contacts in %d backup(s): %s\n", len(backup), len(files), strings.Join(files, ", "))
 
 	if err := os.MkdirAll(o.tokenDir, 0o700); err != nil {
 		return err
 	}
-	dstTok := filepath.Join(o.tokenDir, "token_destino.json")
+	dstTok := filepath.Join(o.tokenDir, "token_destination.json")
 	if o.relogin {
 		os.Remove(dstTok)
 	}
-	dst, err := authenticate(ctx, o.credentials, dstTok, "DESTINO", people.ContactsScope)
+	dst, err := authenticate(ctx, o.credentials, dstTok, "DESTINATION", people.ContactsScope)
 	if err != nil {
 		return err
 	}
@@ -215,9 +215,9 @@ func runCheck(ctx context.Context, o options, files []string) error {
 	}
 	contacts, err := listContacts(ctx, svc)
 	if err != nil {
-		return fmt.Errorf("lendo contatos do destino: %w", err)
+		return fmt.Errorf("reading destination contacts: %w", err)
 	}
-	fmt.Printf("Destino: %s (%d contatos)\n", dst.Email, len(contacts))
+	fmt.Printf("Destination: %s (%d contacts)\n", dst.Email, len(contacts))
 
 	ix := newDstIndex(contacts)
 	byStatus := map[checkStatus][]checkResult{}
@@ -230,30 +230,30 @@ func runCheck(ctx context.Context, o options, files []string) error {
 		}
 	}
 
-	fmt.Printf("\nResumo:\n")
-	fmt.Printf("  %4d copiados pelo programa\n", len(byStatus[checkImported]))
-	fmt.Printf("  %4d não foram criados porque o email já existia no destino\n", len(byStatus[checkEmail]))
-	fmt.Printf("  %4d não foram criados porque o telefone já existia no destino\n", len(byStatus[checkPhone]))
-	fmt.Printf("  %4d só têm no destino alguém com o mesmo nome\n", len(byStatus[checkName]))
-	fmt.Printf("  %4d NÃO estão no destino\n", len(byStatus[checkMissing]))
-	fmt.Printf("  %4d estão no destino, mas faltando algum dado\n", len(withLoss))
+	fmt.Printf("\nSummary:\n")
+	fmt.Printf("  %4d copied by the program\n", len(byStatus[checkImported]))
+	fmt.Printf("  %4d were not created because the email already existed in the destination\n", len(byStatus[checkEmail]))
+	fmt.Printf("  %4d were not created because the phone already existed in the destination\n", len(byStatus[checkPhone]))
+	fmt.Printf("  %4d only have someone with the same name in the destination\n", len(byStatus[checkName]))
+	fmt.Printf("  %4d are NOT in the destination\n", len(byStatus[checkMissing]))
+	fmt.Printf("  %4d are in the destination, but missing some data\n", len(withLoss))
 
-	printSection("NÃO estão no destino", byStatus[checkMissing], true)
-	printSection("Só bateram pelo nome (confira se é a mesma pessoa)", byStatus[checkName], true)
-	printSection("Estão no destino, mas faltando dados", withLoss, false)
+	printSection("NOT in the destination", byStatus[checkMissing], true)
+	printSection("Matched only by name (check whether it is the same person)", byStatus[checkName], true)
+	printSection("In the destination, but missing data", withLoss, false)
 	if o.verbose {
-		printSection("Copiados pelo programa", byStatus[checkImported], false)
-		printSection("Já existiam no destino (email)", byStatus[checkEmail], false)
-		printSection("Já existiam no destino (telefone)", byStatus[checkPhone], false)
+		printSection("Copied by the program", byStatus[checkImported], false)
+		printSection("Already existed in the destination (email)", byStatus[checkEmail], false)
+		printSection("Already existed in the destination (phone)", byStatus[checkPhone], false)
 	}
 
 	if n := len(byStatus[checkMissing]); n > 0 {
-		fmt.Printf("\nOs %d contatos que não estão no destino provavelmente foram apagados ou\n"+
-			"editados lá depois da cópia (veja a Lixeira do Google Contacts). Os dados\n"+
-			"completos deles estão nos arquivos de backup.\n", n)
+		fmt.Printf("\nThe %d contacts that are not in the destination were probably deleted or\n"+
+			"edited there after the copy (see the Google Contacts Trash). Their complete\n"+
+			"data is in the backup files.\n", n)
 	}
 	if len(byStatus[checkMissing])+len(byStatus[checkName])+len(withLoss) == 0 {
-		fmt.Println("\nTudo certo: todos os contatos do backup estão no destino, sem perda de dados.")
+		fmt.Println("\nAll good: every contact in the backup is in the destination, with no data loss.")
 	}
 	return nil
 }
@@ -269,16 +269,16 @@ func printSection(title string, rs []checkResult, showContact bool) {
 		fmt.Printf("  - %s — %s\n", displayName(r.src), r.reason)
 		if showContact {
 			if s := contactSummary(r.src); s != "" {
-				fmt.Printf("      na origem: %s\n", s)
+				fmt.Printf("      in the source: %s\n", s)
 			}
 		}
 		if len(r.lost) > 0 {
-			fmt.Printf("      falta no destino: %s\n", strings.Join(r.lost, ", "))
+			fmt.Printf("      missing in the destination: %s\n", strings.Join(r.lost, ", "))
 		}
 	}
 }
 
-// contactSummary mostra emails e telefones do contato, para ajudar a achá-lo.
+// contactSummary shows the contact's emails and phones, to help find it.
 func contactSummary(p *people.Person) string {
 	var parts []string
 	for _, e := range p.EmailAddresses {

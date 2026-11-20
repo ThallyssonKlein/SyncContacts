@@ -1,11 +1,11 @@
-# Credenciais e tokens OAuth: nunca versionar
+# OAuth credentials and tokens: never commit
 credentials.json
 client_secret*.json
 token*.json
 .synccontacts/
 
-# Backups dos contatos apagados da origem (dados pessoais)
+# Backups of contacts deleted from the source (personal data)
 backup_*.json
 
-# Binário
+# Binary
 /synccontacts

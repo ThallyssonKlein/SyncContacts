@@ -1,140 +1,143 @@
 # SyncContacts
 
-Copia os contatos do Google Contacts de uma conta Google (**origem**) para
-outra (**destino**) sem criar duplicatas. A conta de origem é acessada só em
-modo leitura, a não ser que você peça para apagar dela o que foi copiado
+Copies Google Contacts from one Google account (**source**) to another
+(**destination**) without creating duplicates. The source account is accessed
+read-only, unless you ask to delete what was copied from it
 (`-delete-source`).
 
-## Como evita duplicatas
+## How it avoids duplicates
 
-Um contato da origem **não** é criado no destino quando:
+A source contact is **not** created in the destination when:
 
-1. ele já foi importado por este programa antes (cada contato criado guarda o
-   id do contato de origem em `clientData`). Então dá para rodar quantas vezes
-   quiser.
-2. algum **email** dele já existe no destino (sem diferenciar maiúsculas);
-3. algum **telefone** dele já existe no destino. A comparação usa os últimos 8
-   dígitos, então `+55 (11) 98765-4321`, `011 98765 4321` e `8765-4321` são
-   tratados como o mesmo número;
-4. o **nome completo** é igual (sem diferenciar acentos/maiúsculas). Para
-   desligar essa regra, use `-match-name=false`.
+1. it was already imported by this program before (each created contact stores
+   the source contact's id in `clientData`). So you can run it as many times as
+   you like.
+2. any of its **emails** already exists in the destination (case-insensitive);
+3. any of its **phones** already exists in the destination. The comparison uses
+   the last 8 digits, so `+55 (11) 98765-4321`, `011 98765 4321` and
+   `8765-4321` are treated as the same number;
+4. the **full name** is the same (ignoring accents and case). To turn this rule
+   off, use `-match-name=false`.
 
-Contatos repetidos dentro da própria origem também são criados uma vez só.
+Contacts repeated within the source itself are also created only once.
 
-## O que é copiado
+## What is copied
 
-Nome, apelidos, emails, telefones, endereços, empresa/cargo, aniversário,
-notas, sites, parentes, datas, campos personalizados, mensageiros, profissão e
-marcadores (labels). Os marcadores que não existem no destino são criados
-(`-labels=false` desliga isso).
+Name, nicknames, emails, phones, addresses, company/job title, birthday, notes,
+websites, relatives, dates, custom fields, messengers, occupation and labels.
+Labels that do not exist in the destination are created (`-labels=false` turns
+this off).
 
-**Não** são copiados: fotos, e contatos de "Outros contatos" (os que o Gmail
-salva sozinho).
+**Not** copied: photos, and "Other contacts" (the ones Gmail saves
+automatically).
 
-## Configuração (uma vez só)
+## Setup (one time only)
 
-1. Acesse o [Google Cloud Console](https://console.cloud.google.com/) e crie
-   um projeto (ou use um que já tenha).
-2. Em **APIs e serviços → Biblioteca**, ative a **Google People API**.
-3. Em **APIs e serviços → Tela de permissão OAuth** (Google Auth Platform):
-   - tipo de usuário **Externo**;
-   - em **Público-alvo → Usuários de teste**, adicione **as duas contas**
-     (origem e destino).
-4. Em **Credenciais → Criar credenciais → ID do cliente OAuth**, escolha o tipo
-   **App para computador** e baixe o JSON.
-5. Salve o arquivo como `credentials.json` na pasta do projeto.
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and
+   create a project (or use an existing one).
+2. Under **APIs & Services → Library**, enable the **Google People API**.
+3. Under **APIs & Services → OAuth consent screen** (Google Auth Platform):
+   - user type **External**;
+   - under **Audience → Test users**, add **both accounts** (source and
+     destination).
+4. Under **Credentials → Create credentials → OAuth client ID**, choose the
+   **Desktop app** type and download the JSON.
+5. Save the file as `credentials.json` in the project folder.
 
-> Com o app em modo "Teste", o Google expira os tokens em 7 dias. Se der erro
-> de autenticação depois disso, o programa pede o login de novo sozinho.
+> While the app is in "Testing" mode, Google expires tokens after 7 days. If
+> you get an authentication error after that, the program asks you to sign in
+> again by itself.
 
-## Uso
+## Usage
 
 ```sh
 go build -o synccontacts .
 
-# 1) Simulação: mostra o que seria criado, sem alterar nada
+# 1) Simulation: shows what would be created, without changing anything
 ./synccontacts -dry-run
 
-# 2) Cópia de verdade (pede confirmação antes)
+# 2) Real copy (asks for confirmation first)
 ./synccontacts
 ```
 
-Na primeira execução o navegador abre duas vezes: primeiro faça login na conta
-de **ORIGEM**, depois na de **DESTINO**. Os tokens ficam em
-`~/.config/synccontacts/` e as próximas execuções não pedem login. O programa
-mostra os emails das duas contas antes de qualquer alteração e se recusa a
-rodar se forem a mesma.
+On the first run the browser opens twice: first sign in to the **SOURCE**
+account, then to the **DESTINATION** one. Tokens are stored in
+`~/.config/synccontacts/` and later runs do not ask for a login. The program
+shows both accounts' emails before any change and refuses to run if they are
+the same.
 
-| Opção | Descrição |
+| Option | Description |
 |---|---|
-| `-dry-run` | só mostra o que seria feito |
-| `-v` | lista também os contatos ignorados e o motivo |
-| `-match-name=false` | não considera duplicado só por ter o mesmo nome |
-| `-labels=false` | não copia marcadores |
-| `-yes` | não pede confirmação |
-| `-relogin` | esquece os tokens salvos e faz login de novo (para trocar de conta) |
-| `-credentials ARQ` | caminho do JSON do cliente OAuth (padrão `credentials.json`) |
-| `-token-dir DIR` | onde guardar os tokens |
-| `-batch N` | contatos por requisição (1–200, padrão 200) |
-| `-delete-source` | depois de copiar, apaga da origem os contatos copiados |
-| `-delete-duplicates` | também apaga da origem os que já existiam no destino (por email/telefone) |
+| `-dry-run` | only shows what would be done |
+| `-v` | also lists the skipped contacts and why |
+| `-match-name=false` | do not treat having the same name as a duplicate |
+| `-labels=false` | do not copy labels |
+| `-yes` | do not ask for confirmation |
+| `-relogin` | forget the saved tokens and sign in again (to switch accounts) |
+| `-credentials FILE` | path to the OAuth client JSON (default `credentials.json`) |
+| `-token-dir DIR` | where to store the tokens |
+| `-batch N` | contacts per request (1–200, default 200) |
+| `-delete-source` | after copying, deletes the copied contacts from the source |
+| `-delete-duplicates` | also deletes from the source the ones that already existed in the destination (by email/phone) |
 
-Se a cópia falhar no meio (queda de rede, limite da API), é só rodar de novo:
-os contatos que já foram criados são reconhecidos e pulados.
+If the copy fails midway (network drop, API limit), just run it again: the
+contacts that were already created are recognized and skipped.
 
-## Apagar da origem o que foi copiado (mover em vez de copiar)
+## Deleting from the source what was copied (move instead of copy)
 
 ```sh
-./synccontacts -delete-source -dry-run   # confira a lista marcada com "-"
+./synccontacts -delete-source -dry-run   # check the list marked with "-"
 ./synccontacts -delete-source
 ```
 
-Com `-delete-source`, depois da cópia o programa apaga da origem:
+With `-delete-source`, after the copy the program deletes from the source:
 
-- os contatos criados no destino nesta execução;
-- os contatos que já tinham sido copiados por ele em execuções anteriores.
+- the contacts created in the destination in this run;
+- the contacts it had already copied in previous runs.
 
-Com `-delete-duplicates`, ele apaga também os contatos que foram pulados porque
-o **email ou telefone** já existia no destino. Cuidado: o contato do destino
-pode não ter todos os dados do contato da origem.
+With `-delete-duplicates`, it also deletes the contacts that were skipped
+because their **email or phone** already existed in the destination. Be
+careful: the destination contact may not have all the data of the source
+contact.
 
-Travas de segurança:
+Safeguards:
 
-- contatos que só bateram pelo **nome** nunca são apagados;
-- se a cópia falhar no meio, **nada** é apagado;
-- pede uma confirmação separada antes de apagar (a não ser com `-yes`);
-- antes de apagar, salva os contatos em `backup_origem_<data>.json` na pasta
-  atual;
-- o Google Contacts também permite reverter alterações dos últimos 30 dias em
-  **Configurações → Desfazer alterações**, na conta de origem.
+- contacts that matched only by **name** are never deleted;
+- if the copy fails midway, **nothing** is deleted;
+- it asks for a separate confirmation before deleting (unless `-yes`);
+- before deleting, it saves the contacts to `backup_source_<date>.json` in the
+  current directory;
+- Google Contacts also lets you undo changes from the last 30 days under
+  **Settings → Undo changes**, in the source account.
 
-Para apagar, a conta de origem precisa de permissão de escrita. Por isso, na
-primeira vez com `-delete-source`, o login da origem é pedido de novo, agora
-pedindo acesso de edição.
+Deleting requires write permission on the source account. So, the first time
+you use `-delete-source`, the source login is requested again, this time asking
+for edit access.
 
-## Conferir o que foi parar no destino
+## Checking what ended up in the destination
 
 ```sh
-./synccontacts -check                     # usa os backup_origem_*.json da pasta atual
-./synccontacts -check -v backup_origem_20261108-105808.json
+./synccontacts -check                     # uses the backup_source_*.json files in the current directory
+./synccontacts -check -v backup_source_20261108-105808.json
 ```
 
-Lê os contatos dos backups (os que foram apagados da origem), lista os
-contatos do destino e mostra o que aconteceu com cada um:
+Reads the contacts from the backups (the ones deleted from the source), lists
+the destination's contacts and shows what happened to each one:
 
-- **copiado pelo programa**: o contato do destino tem a marca de origem dele;
-- **email/telefone já existia**: não foi criado porque já havia um contato com
-  esse email ou telefone no destino;
-- **só bateu pelo nome**: no destino só existe alguém com o mesmo nome;
-- **não está no destino**: nada corresponde a ele (provavelmente foi apagado
-  ou editado no destino depois da cópia). Os dados estão no backup.
+- **copied by the program**: the destination contact carries its source mark;
+- **email/phone already existed**: it was not created because a contact with
+  that email or phone already existed in the destination;
+- **matched only by name**: the destination only has someone with the same
+  name;
+- **not in the destination**: nothing matches it (probably deleted or edited in
+  the destination after the copy). The data is in the backup.
 
-Também avisa quando o contato do destino não tem algum dado que o da origem
-tinha (outro telefone, email, endereço, aniversário, notas...). Por padrão só
-lista os casos com problema; com `-v`, lista todos. Só faz login no destino e
-não altera nada. As opções vêm antes dos arquivos.
+It also warns when the destination contact lacks some data the source one had
+(another phone, email, address, birthday, notes...). By default it lists only
+the problem cases; with `-v`, it lists all of them. It only signs in to the
+destination and changes nothing. Options come before the files.
 
-## Testes
+## Tests
 
 ```sh
 go test ./...
